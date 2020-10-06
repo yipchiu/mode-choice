@@ -1,0 +1,852 @@
+---
+title: "Project1"
+author: "Ye Chao"
+date: "2019/10/15"
+output:
+  html_document: default
+  pdf_document: default
+---
+## Import data ----
+```{r}
+## Import ---- 
+Trip <- read.csv("C:/Users/chaoye/Desktop/Davis/quarter 4/Graduate Project/2017 NHTS Data/trippub.csv", header = TRUE)
+```
+
+## I. Descriptive Analysis ----
+### 0. Data pre-precessing ----
+```{r}
+# ### interested variables ----
+# Trip$CDIVMSAR  #Grouping of household by combination of census division, MSA status, and presence of a subway system when population greater than 1 million
+# Trip$HHSTATE  # state
+# Trip$HHSTFIPS  # state fips
+# 
+# Trip$MSACAT  # Metropolitan Statistical Area (MSA) category for the household's home address, based on household's home
+# Trip$MSASIZE # Population size category of the Metropolitan Statistical Area (MSA), from the 2010-2014 five-year American Community Survey (ACS) API.
+# 
+# 
+# Trip$DRIVER  # Driver status
+# Trip$DRVRCNT  #Number of drivers in household
+# 
+# Trip$HBPPOPDN # Category of population density (persons per square mile) in the census block group of the household's home location
+# 
+# Trip$LOOP_TRIP # Trip od same destination
+# 
+# Trip$NUMTRANS  # count of transfers
+# Trip$TRACCTM # trip time to transit station in minutes
+# Trip$TRWAITTM # transit wait time in minutes
+
+## Variables selection ----
+Myvars <- c("HOUSEID", "PERSONID", "TDTRPNUM", "TRPTRANS", "WHYTRP1S", "STRTTIME", "ENDTIME", "HBHUR", "TRVLCMIN", "TRPMILES", "GASPRICE", "HHFAMINC", "HHVEHCNT", "HHSIZE", "R_AGE", "R_SEX", "CDIVMSAR", "HHSTATE", "HHSTFIPS", "MSACAT", "MSASIZE", "DRIVER", "DRVRCNT", "HBPPOPDN", "LOOP_TRIP", "NUMTRANS", "TRACCTM", "TRWAITTM")
+Mytrip <- Trip[Myvars]
+
+
+
+## Mode selection ----
+walk <- subset(Mytrip, Mytrip$TRPTRANS == 1)
+bicy <- subset(Mytrip, Mytrip$TRPTRANS == 2)
+pt <- subset(Mytrip, Mytrip$TRPTRANS == 11 | Mytrip$TRPTRANS ==12)
+taxi <- subset(Mytrip, Mytrip$TRPTRANS == 17)
+
+
+Mode <- rbind(walk, bicy, pt, taxi)
+
+Mode <- subset(Mode, Mode$TRVLCMIN >= 0)
+Mode <- subset(Mode, Mode$TRPMILES >= 0)
+Mode <- subset(Mode, Mode$HHFAMINC >= 0)
+Mode <- subset(Mode, Mode$R_SEX >= 0)
+
+Mode$R_SEX <- as.factor(Mode$R_SEX)
+levels(Mode$R_SEX) <- c("male", "female") # 0 as male, 1 as female.
+
+
+# urban work trip ----
+Mode.u.w <- subset(Mode, as.character(Mode$HBHUR) == "U" & Mode$WHYTRP1S == 10)
+table(Mode.u.w$TRPTRANS)
+
+walk <- subset(Mode.u.w, Mode.u.w$TRPTRANS == 1)
+walk$TDTRPNUM <- 1:1702
+
+bicy <- subset(Mode.u.w, Mode.u.w$TRPTRANS == 2)
+bicy$TDTRPNUM <- 1:276
+
+pt <- subset(Mode.u.w, Mode.u.w$TRPTRANS == 11 | Mode.u.w$TRPTRANS ==12)
+pt$TDTRPNUM <- 1:461
+
+taxi <- subset(Mode.u.w, Mode.u.w$TRPTRANS == 17)
+taxi$TDTRPNUM <- 1:122
+
+car <- subset(Mode.u.w, Mode.u.w$TRPTRANS == 3| Mode.u.w$TRPTRANS == 4|Mode.u.w$TRPTRANS == 5|Mode.u.w$TRPTRANS == 6)
+
+Mode.u.w <- rbind(walk, bicy, pt, taxi)
+
+Mode.u.w$TRPTRANS <- as.factor(Mode.u.w$TRPTRANS)
+levels(Mode.u.w$TRPTRANS) <- c("walk", "bicy", "pt", "pt", "taxi")
+
+
+## By the way, how many trips by private cars ----
+car <- subset(Mytrip, Mytrip$TRPTRANS == 3 | Mytrip$TRPTRANS == 4 | Mytrip$TRPTRANS == 5 | Mytrip$TRPTRANS == 6)
+car <- subset(car, as.character(car$HBHUR) == "U" & car$WHYTRP1S == 10)
+nrow(car)
+```
+
+### 1. about the sample ----
+```{r}
+## MSA area
+msa <- table(Mode.u.w$HHSTATE, Mode.u.w$MSASIZE)
+msa <- as.data.frame.matrix(msa)
+(sum(msa$`4`)+sum(msa$`5`))/sum(msa) # = 96.33% of the sample is from a MSA that has a population size more than 1 million. 
+
+## Loop Trip or not
+loop <- table(Mode.u.w$LOOP_TRIP)
+loop <- as.data.frame(loop)
+loop[2,]/sum(loop$Freq) # = 95.67% of the trips took place within the project scope are not loop trip since the purpose for the trips is going to work. 
+
+
+```
+
+### 2. when will they travel ----
+```{r, , fig.width=8, fig.height=10}
+# Mode.u.w$STRTTIME <- formatC(Mode.u.w$STRTTIME, width = 4, format = "d", flag = "0")
+# Mode.u.w$ENDTIME <- formatC(Mode.u.w$ENDTIME, width = 4, format = "d", flag = "0")
+# 
+# Mode.u.w$STRTTIME<- format(strptime(Mode.u.w$STRTTIME, format="%H%M"), format = "%H:%M")
+# Mode.u.w$ENDTIME<- format(strptime(Mode.u.w$ENDTIME, format="%H%M"), format = "%H:%M")
+# 
+# Mode.u.w$STRTTIME <- as.POSIXct(Mode.u.w$STRTTIME,format= "%H:%M")
+# Mode.u.w$ENDTIME <- as.POSIXct(Mode.u.w$ENDTIME,format= "%H:%M")
+# 
+# # Mode.u.w$STRTTIME <- format(Mode.u.w$STRTTIME, "%H:%M:%S")
+# # Mode.u.w$ENDTIME <- format(Mode.u.w$ENDTIME, "%H:%M:%S")
+
+# install.packages("timelineS")
+library(timelineS)
+library(ggplot2)
+
+timelineG(df=Mode.u.w, start="STRTTIME", end="ENDTIME", names="TDTRPNUM", group1="TRPTRANS", group2="R_SEX", )
+```
+
+### 3. They don't drive because they don't have driver ----
+```{r}
+library(ggplot2)
+table(Mode.u.w$DRIVER)
+table(Mode.u.w$HHVEHCNT)
+
+driver <- subset(Mode.u.w, Mode.u.w$DRIVER > 0)
+driver$DRIVER <- as.factor(driver$DRIVER)
+levels(driver$DRIVER) <- c("Have a license", "Don't have a license")
+driver$HHVEHCNT <- as.numeric(driver$HHVEHCNT)
+
+## 3.1 with respect to family income ----
+ggplot(data = driver) +
+  geom_boxplot(mapping = aes(TRPTRANS, HHFAMINC))+
+  labs(x= "Mode",y = "Household family income")+
+  labs(title = "Bar Chart", subtitle = "Household family income - Mode")
+
+
+# ggplot(data = driver, mapping = aes(x = TDTRPNUM, y = HHVEHCNT)) +
+#    geom_boxplot(mapping = aes(color = TRPTRANS))+
+#    facet_wrap( ~TRPTRANS)
+
+## 3.2 vehicle count ----
+veh <- aggregate(driver$HHVEHCNT~driver$TRPTRANS, FUN=mean)
+veh <- as.data.frame.matrix(veh)
+
+
+ggplot(data = veh, mapping = aes(x = veh$`driver$TRPTRANS`, y = veh$`driver$HHVEHCNT`)) +
+  geom_col(mapping = aes(fill = veh$`driver$TRPTRANS`))+
+  labs(x= "Mode",y = "Average household vehicle counts")+
+  labs(title = "Average household vehicle counts - Mode")+
+  labs(fill = "Mode")
+
+
+# table(driver$DRVRCNT)
+
+## 3.3 over household size ----
+r1 <- aggregate(driver$DRVRCNT/driver$HHSIZE, by = list(driver$TRPTRANS), mean)
+r2 <- aggregate(driver$HHVEHCNT/driver$HHSIZE, by = list(driver$TRPTRANS), mean)
+r <- cbind(r1,r2)
+r <- r[,-3]
+names(r) <- c("Mode","Average drivercount / HHsize","Average vehiclecount / HHsize")
+df2 <- reshape::melt(r, id = c(1))
+ggplot(df2, aes(x=Mode, y=value, fill=variable)) +
+    geom_bar(stat='identity', position='dodge')+
+  labs(x= "Mode",y = "Ratio value")+
+  labs(title = "Average driver count & vehicle count / Household size")
+# r1 <- as.data.frame(table(driver$DRVRCNT/driver$HHSIZE))
+# r1
+# 
+# ggplot(data = r) +
+#   geom_col(mapping = aes(x = `1`, y = r$`2`)) +
+#   geom_col(mapping = aes(x = `1`, y = r$`4`))
+# 
+# ggplot(r, aes(x=`1`, y=value, fill=variable)) +
+#     geom_bar(stat='identity', position='dodge')
+# 
+# r2 <- as.data.frame(table(driver$HHVEHCNT/driver$HHSIZE))
+```
+
+### 4. About transfering and waiting ----
+```{r}
+# Trip$NUMTRANS  # count of transfers
+# Trip$TRACCTM # trip time to transit station in minutes
+# Trip$TRWAITTM # transit wait time in minutes
+## 4.1 Number of transfer
+Mode.u.w$NUMTRANS <- as.numeric(Mode.u.w$NUMTRANS)
+table(Mode.u.w$NUMTRANS)
+table(pt$NUMTRANS)
+
+trans <- subset(pt, pt$NUMTRANS >= 0)
+trans$TDTRPNUM <- 1:nrow(trans)
+t1 <- table(trans$NUMTRANS)
+t1 <- as.data.frame(t1)
+
+
+ggplot(t1, mapping = aes(x=Var1, y=Freq)) +
+  geom_bar(stat = "identity")+
+  labs(x= "Number of transfer",y = "Frequency")+
+  labs(title = "For the people taking public transit", subtitle = "Number of their transfer")
+
+
+
+# table(walk$TRWAITTM)
+# table(bicy$TRWAITTM)
+# table(taxi$TRWAITTM)
+# table(pt$TRWAITTM)
+```
+
+### 5. percetage stack plot: Mode - Income ----
+```{r}
+# mode & income
+Myvars <- c("TRPTRANS", "HHFAMINC")
+
+stackplot1 <- Mode.u.w[Myvars]
+stackplot1$type <- NA
+
+stackplot1$HHFAMINC <- as.factor(stackplot1$HHFAMINC)
+levels(stackplot1$HHFAMINC) <- c("14999 or less", "14999 or less", "15000 - 34999", "15000 - 34999", "35000 - 74999", "35000 - 74999", "75000 - 124999", "75000 - 124999" , "more than 125000", "more than 125000", "more than 125000")
+
+s1 <- as.data.frame.matrix(table(stackplot1$HHFAMINC, stackplot1$TRPTRANS))
+s1 <- cbind(rownames(s1), data.frame(s1, row.names=NULL))
+s2 <- reshape::melt(s1, id = c(1))
+names(s2) <- c("Income level", "variable", "value")
+
+ggplot(s2, aes(x = variable, y = value, fill = `Income level`)) + 
+  geom_bar(position = "fill",stat = "identity") +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(x= "Mode",y = " ")+
+  labs(title = "Percent of income categories within different modes")
+
+
+```
+
+### 6. percetage stack plot: Mode - age ----
+```{r}
+Myvars <- c("TRPTRANS", "R_AGE")
+stackplot2 <- Mode.u.w[Myvars]
+stackplot2 <- subset(stackplot2, stackplot2$R_AGE > 0)
+stackplot2$type <- 0
+
+for (i in 1:nrow(stackplot2)) {
+  if (stackplot2$R_AGE[i] <= 18) {
+  stackplot2$type[i] <- 1
+  }
+}
+
+for (i in 1:nrow(stackplot2)) {
+  if (stackplot2$R_AGE[i] > 18 & stackplot2$R_AGE[i] <= 30) {
+  stackplot2$type[i] <- 2
+  }
+}
+
+for (i in 1:nrow(stackplot2)) {
+  if (stackplot2$R_AGE[i] > 30 & stackplot2$R_AGE[i] <= 40) {
+  stackplot2$type[i] <- 3
+  }
+}
+
+for (i in 1:nrow(stackplot2)) {
+  if (stackplot2$R_AGE[i] > 40 & stackplot2$R_AGE[i] <= 50) {
+  stackplot2$type[i] <- 4
+  }
+}
+
+for (i in 1:nrow(stackplot2)) {
+  if (stackplot2$R_AGE[i] > 50 & stackplot2$R_AGE[i] <= 60) {
+  stackplot2$type[i] <- 5
+  }
+}
+
+for (i in 1:nrow(stackplot2)) {
+  if (stackplot2$R_AGE[i] > 60) {
+  stackplot2$type[i] <- 6
+  }
+}
+
+stackplot2$type <- as.factor(stackplot2$type)
+levels(stackplot2$type) <- c("0-18", "18 - 30", "30 - 40", "40 - 50", "50 - 60", "Above 60")
+# levels(stackplot2$type)
+
+a1 <- as.data.frame.matrix(table(stackplot2$type, stackplot2$TRPTRANS))
+a1 <- cbind(rownames(a1), data.frame(a1, row.names=NULL))
+a2 <- reshape::melt(a1, id = c(1))
+names(a2) <- c("Age", "variable", "value")
+
+ggplot(a2, aes(x = variable, y = value, fill = Age)) + 
+  geom_bar(position = "fill",stat = "identity") +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(x= "Mode",y = " ")+
+  labs(title = "Percent of age categories within different modes")
+
+```
+### 7. Income ----
+```{r}
+## Income - vehicle ---- 
+
+Myvars <- c("HHFAMINC", "HHVEHCNT")
+
+stackplot3 <- Mode.u.w[Myvars]
+# stackplot3$type <- NA
+
+stackplot3$HHFAMINC <- as.factor(stackplot3$HHFAMINC)
+levels(stackplot3$HHFAMINC) <- c("14999 or less", "14999 or less", "15000 - 34999", "15000 - 34999", "35000 - 74999", "35000 - 74999", "75000 - 124999", "75000 - 124999" , "more than 125000", "more than 125000", "more than 125000")
+
+for (i in 1:nrow(stackplot3)) {
+  if (stackplot3$HHVEHCNT[i] >= 3) {
+    stackplot3$HHVEHCNT[i] <- 3
+  }
+}
+
+table(stackplot3$HHVEHCNT)
+
+v1 <- as.data.frame.matrix(table(stackplot3$HHFAMINC, stackplot3$HHVEHCNT))
+v1 <- cbind(rownames(v1), data.frame(v1, row.names=NULL))
+names(v1) <- c("Income", "0", "1", "2", "3 or more")
+
+
+v2 <- reshape::melt(v1, id = c(1))
+names(v2) <- c("Income level", "variable", "value")
+
+ggplot(v2, aes(x = variable, y = value, fill = `Income level`)) + 
+  geom_bar(position = "fill",stat = "identity") +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(x= "Car ownership",y = " ")+
+  labs(title = "Percent of income categories within car ownership")
+```
+### 8. On and off peak ----
+```{r}
+## On and off peak ---- :
+
+Mode.u.w$onoffid <- 0   #### peak hour idtificaiton: peak hour 1, off-peak hour 0.  
+
+for (i in 1:nrow(Mode.u.w)) {
+  if (Mode.u.w$STRTTIME[i] >= 600 & Mode.u.w$STRTTIME[i] <=900) {
+    Mode.u.w$onoffid[i] <- 1
+  }
+ 
+  if (Mode.u.w$STRTTIME[i] >= 1700 & Mode.u.w$STRTTIME[i] <= 1900) {
+    Mode.u.w$onoffid[i] <- 1
+  }
+}
+
+onoff <- as.data.frame.matrix(table(Mode.u.w$TRPTRANS, Mode.u.w$onoffid))
+onoff <- cbind(rownames(onoff), data.frame(onoff, row.names=NULL))
+names(onoff) <- c("Mode", "Off-peak hour trip", "Peak hour trip")
+
+onoff2 <- reshape::melt(onoff, id = c(1))
+names(onoff2) <- c("Mode", "Peak hour", "Trip counts")
+
+
+ggplot(onoff2, aes(fill=`Peak hour`, y=`Trip counts`, x=Mode)) + 
+  geom_bar(position="dodge", stat="identity") +
+  labs(title = "On and off peak hour trips for each mode")
+  
+```
+
+## Descriptive ends ----
+```{r}
+rm(list = ls()) # empty the environment
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## II. Analytical Begins ---- 
+### 0. Data pre-processing ----
+```{r, echo=FALSE}
+## Import ---- 
+Trip <- read.csv("C:/Users/chaoye/Desktop/Davis/quarter 4/Graduate Project/2017 NHTS Data/trippub.csv", header = TRUE)
+```
+
+
+```{r}
+
+# ### interested variables ----
+
+
+# 1. Trip$MSACAT  # Metropolitan Statistical Area (MSA) category for the household's home address, based on household's home
+
+# 2. Trip$HBPPOPDN #population density of household
+
+
+##Variables selection ----
+Myvars <- c("HOUSEID", "PERSONID", "TDTRPNUM", "TRPTRANS", "WHYTRP1S", "STRTTIME", "ENDTIME", "HBHUR", "TRVLCMIN", "TRPMILES", "GASPRICE", "HHFAMINC", "HHVEHCNT", "HHSIZE", "R_AGE", "R_SEX", "MSACAT", "HBPPOPDN")
+Mytrip <- Trip[Myvars]
+
+
+## Mode selection ----
+walk <- subset(Mytrip, Mytrip$TRPTRANS == 1)
+bicy <- subset(Mytrip, Mytrip$TRPTRANS == 2)
+pt <- subset(Mytrip, Mytrip$TRPTRANS == 11 | Trip$TRPTRANS ==12)
+taxi <- subset(Mytrip, Mytrip$TRPTRANS == 17)
+
+
+
+Mode <- rbind(walk, bicy, pt, taxi)
+Mode <- subset(Mode, Mode$TRVLCMIN >= 0)
+Mode <- subset(Mode, Mode$TRPMILES >= 0)
+Mode <- subset(Mode, Mode$HHFAMINC >= 0)
+Mode <- subset(Mode, Mode$R_SEX >= 0)
+
+Mode$R_SEX <- as.factor(Mode$R_SEX)
+levels(Mode$R_SEX) <- c("0", "1") # 0 as male, 1 as female.
+
+Mode$TRPTRANS <- as.factor(Mode$TRPTRANS)
+levels(Mode$TRPTRANS) <- c("walk", "bicy", "pt", "pt", "taxi")
+
+Mode.MNL <- Mode
+Mode <- Mode[,c(-1,-2,-3)]
+
+rm(walk)
+rm(bicy)
+rm(pt)
+rm(taxi)
+
+# plot(Mode, pch = 20, cex = 1)
+```
+
+```{r, echo=FALSE}
+# how to split the data
+# set.seed(123)
+# 
+# train <- sample(1:dim(Mode)[1], dim(Mode)[1]*0.7, rep=FALSE)
+# test <- -train
+# 
+# training_data<- Mode[train, ]
+# 
+# testing_data= Mode[test, ]
+```
+
+### 1. Develop MNL ----
+#### (1) MNL 1 - No variable is controled(All area; All kinds of trips) ----
+```{r, echo=FALSE}
+Mode$out <- relevel(Mode$TRPTRANS , ref = "walk")
+library(nnet)
+library(pscl)
+library(mlogit)
+#library(dplyr)
+
+MNL1 <- multinom(out ~ TRVLCMIN + TRPMILES + GASPRICE + HHFAMINC + HHVEHCNT + HHSIZE + R_AGE + R_SEX + MSACAT + HBPPOPDN, data = Mode)
+MNL1
+a <- summary(MNL1)
+
+  ### p-value
+z <- summary(MNL1)$coefficients/summary(MNL1)$standard.errors
+p <- (1 - pnorm(abs(z), 0, 1)) * 2
+p
+
+  ### Predict 
+predict(MNL1, Mode)[1:30]
+predict(MNL1, type = "prob")[1:30]
+head(predict(MNL1, type = "prob"))
+
+
+  ### Misclaasification error
+cn1 <- table(predict(MNL1), Mode$out)
+print(cn1) # off-diagonal is mis-classification
+
+sum(diag(cn1))/sum(cn1) # overall classification correctness rate is 82.1%. However, walking contributes to the most of it. The actual prediction rate for other modes are relatively low. 
+
+as.data.frame(diag(cn1))/apply(as.data.frame.matrix(cn1), 2, sum)
+  
+
+  ### r-suqare
+round(pR2(MNL1),4)
+
+```
+
+#### (2) MNL 2 - Restricted to urban area and work trips ----
+```{r,echo=FALSE}
+# MNL 2 - Restricted to Urban and work
+library(nnet)
+library(pscl)
+library(mlogit)
+Mode.U.10 <- subset(Mode, as.character(Mode$HBHUR) == "U" & Mode$WHYTRP1S == 10)
+table(Mode.U.10$TRPTRANS)
+levels(Mode.U.10)
+
+
+MNL2 <- multinom(TRPTRANS ~ TRVLCMIN + TRPMILES + GASPRICE + HHFAMINC + HHVEHCNT + HHSIZE + R_AGE + R_SEX + MSACAT + HBPPOPDN, data = Mode.U.10)
+summary(MNL2)
+
+  ### two-tailed z-test
+z <- summary(MNL2)$coefficients/summary(MNL2)$standard.errors
+p<- (1 - pnorm(abs(z), 0, 1)) * 2
+p
+
+  ### odd ratio
+oddsML <- exp(coef(MNL2))
+print(oddsML, digits =2)
+
+
+round(pR2(MNL2),4)
+
+LL0 <- -2561*log(3)
+LL0
+
+
+adr2 <- 1-(logLik(MNL2)-9)/-2472.1724
+adr2
+
+### chi2
+-2*(LL0-logLik(MNL2))
+qchisq(0.95,df=9)
+MNL1.1 <- multinom(TRPTRANS ~ 1, data = Mode.U.10)
+lrtest(MNL2, MNL1.1)
+
+
+
+  ### Predict 
+predict(MNL2, Mode.U.10)[1:30]
+predict(MNL2, type = "prob")[1:30]
+head(predict(MNL2, type = "prob"))
+
+  ### Misclaasification error
+cn2 <- table(predict(MNL2), Mode.U.10$TRPTRANS)
+print(cn2) # off-diagonal is mis-classification
+
+sum(diag(cn2))/sum(cn2) # overall classification errors are similar
+
+as.data.frame(diag(cn2))/apply(as.data.frame.matrix(cn2), 2, sum)
+
+
+
+
+
+  ### confusion matrix
+caret::confusionMatrix(as.factor(predict(MNL2)), as.factor(Mode.U.10$TRPTRANS))
+
+
+# hmftest(MNL1)
+
+Myvars.RF <- c("TRPTRANS", "WHYTRP1S", "HBHUR", "TRVLCMIN", "TRPMILES", "GASPRICE", "HHFAMINC", "HHVEHCNT", "HHSIZE", "R_AGE", "R_SEX", "MSACAT", "HBPPOPDN")
+Mode.RF <- Mode[Myvars.RF]
+Mode.RF <- subset(Mode.RF, as.character(Mode.RF$HBHUR) == "U" & Mode.RF$WHYTRP1S == 10)
+Mode.RF <- Mode.RF[,c(-2, -3)]
+
+
+Train <- sample(1:dim(Mode.RF)[1], dim(Mode.RF)[1]*0.7, rep=FALSE)
+Test <- -Train
+
+training_data<- Mode.RF[Train, ]
+testing_data= Mode.RF[Test, ]
+
+TrainY=training_data[[1]]  
+TrainX=training_data[,-1]
+
+TestY=testing_data[[1]]
+TestX=testing_data[,-1]
+
+
+MNL3 <- multinom(TrainY ~ TRVLCMIN + TRPMILES + GASPRICE + HHFAMINC + HHVEHCNT + HHSIZE + R_AGE + R_SEX + MSACAT + HBPPOPDN, data = TrainX)
+
+
+
+  ### two-tailed z-test
+z <- summary(MNL3)$coefficients/summary(MNL3)$standard.errors
+p<- (1 - pnorm(abs(z), 0, 1)) * 2
+p
+
+  ### odd ratio
+oddsML <- exp(coef(MNL3))
+print(oddsML, digits =2)
+
+
+round(pR2(MNL3),4)
+
+LL0 <- -nrow(TrainX)*log(3)
+LL0
+
+
+adr2 <- 1-(logLik(MNL3)-9)/-2472.1724
+adr2
+
+### chi2
+-2*(LL0-logLik(MNL3))
+qchisq(0.95,df=9)
+MNL1.1 <- multinom(TrainY ~ 1, data = TrainX)
+lrtest(MNL3, MNL1.1)
+
+
+caret::confusionMatrix(as.factor(predict(MNL3,TestX)), as.factor(TestY))
+
+
+```
+# A MNL model tries to reduce r2
+```{r}
+
+MNL4 <- multinom(TrainY ~ TRVLCMIN + GASPRICE + HHFAMINC + HHVEHCNT + HHSIZE + R_AGE + R_SEX + MSACAT + HBPPOPDN , data = TrainX)
+
+z <- summary(MNL4)$coefficients/summary(MNL4)$standard.errors
+p<- (1 - pnorm(abs(z), 0, 1)) * 2
+p
+
+  ### odd ratio
+oddsML <- exp(coef(MNL4))
+print(oddsML, digits =2)
+
+
+round(pR2(MNL4),4)
+
+LL0 <- -nrow(TrainX)*log(3)
+LL0
+
+
+adr2 <- 1-(logLik(MNL4)-8)/-1749.7068
+adr2
+
+### chi2
+-2*(LL0-logLik(MNL4))
+qchisq(0.95,df=9)
+MNL1.1 <- multinom(TrainY ~ 1, data = TrainX)
+lrtest(MNL4, MNL1.1)
+
+caret::confusionMatrix(as.factor(predict(MNL4,TestX)), as.factor(TestY))
+
+
+```
+
+### 2. Develop unsupervised learning ----
+#### (1) Cluster analysis ----
+```{r, echo=FALSE}
+Myvars.Cst <- c("TRPTRANS", "WHYTRP1S", "HBHUR", "TRVLCMIN", "TRPMILES", "GASPRICE", "HHFAMINC", "HHVEHCNT", "HHSIZE", "R_AGE", "MSACAT", "HBPPOPDN")
+Mode.Cst <- Mode[Myvars.Cst]
+
+
+
+Mode.Cst <- Mode.Cst[,c(-2, -3)]
+
+Mode.UrbWrk.Cst <- Mode[Myvars.Cst]
+Mode.UrbWrk.Cst <- subset(Mode.UrbWrk.Cst, as.character(Mode$HBHUR) == "U" & Mode$WHYTRP1S == 10)
+Mode.UrbWrk.Cst <- Mode.UrbWrk.Cst[,c(-2,-3)]
+
+#plot(Mode.UrbWrk.Cst)                                     # Output 0
+
+# Normalize ----
+m <- Mode.UrbWrk.Cst[,-1] # without actual mode
+mean <- apply(m, 2, mean)
+sd <- apply(m, 2, sd)
+Mode.UrbWrk.Cst.Scaled <- scale(m, mean, sd)
+
+# K-MEANS CLUSTERING-----
+## CLUSTERING
+fitK <- kmeans(Mode.UrbWrk.Cst.Scaled, 4)
+fitK
+fitK$centers                                                     # Output 1
+fitK$betweenss/fitK$tot.withinss
+
+plot(Mode.UrbWrk.Cst, col = fitK$cluster)                  # Output 2
+
+
+## CHOOSE K-----
+k <- list()
+for (i in 1:10){
+  k[[i]] <- kmeans(Mode.UrbWrk.Cst.Scaled, i)
+}
+
+betweenss_totss <- list()
+for (i in 1:10){
+  betweenss_totss[[i]] <- k[[i]]$betweenss/k[[i]]$totss
+}
+
+plot(1:10, betweenss_totss,type = "b", ylab = "Between SS/ Total SS", xlab = "Cluster(k)")#look where the shoulder is   # Output 3
+
+Mode.UrbWrk.Cst$Out <- fitK$cluster
+
+
+as.data.frame(table(Mode.UrbWrk.Cst$TRPTRANS))                                                             # Output 4
+as.data.frame(table(subset(Mode.UrbWrk.Cst, as.character(Mode.UrbWrk.Cst$TRPTRANS)=="taxi")$Out))          # Output 5
+```
+
+
+
+#### (2) PCA + Cluster ----
+```{r, echo=FALSE}
+
+pca.x <- data.frame(Mode.UrbWrk.Cst.Scaled)
+
+library(psych)
+library(SensoMineR)
+fa.parallel(pca.x, fa = 'pc', n.iter = 100, show.legend = FALSE) #Scree plot                           # Output 6
+
+#da.panelellipses=panellipse(pca.x, col.p=2, col.j=1, firstvar=3)
+
+pca.fit <- principal(pca.x, nfactors = 4, rotate = "none")
+(pca.fit)
+
+pca.X <- as.data.frame(pca.fit$scores)
+pca.X
+
+
+pca.full <- data.frame(Mode.UrbWrk.Cst$TRPTRANS, pca.X)
+plot(pca.full)                                                                                        # Output 7
+
+# k-means----
+fit.pca.k <- kmeans(pca.X, 4)
+fit.pca.k
+fit.pca.k$centers                                                     # Output 1
+fit.pca.k$betweenss/fit.pca.k$tot.withinss
+
+
+#table(Mode_C_U_W$TRPTRANS)
+plot(pca.full, col = fit.pca.k$cluster)                                                               # Output 8
+# plot(pca.full, col = pca.full$Mode.UrbWrk.Cst.TRPTRANS)
+pca.full$out <- fit.pca.k$cluster
+
+
+for (i in 1:10){
+  k[[i]] <- kmeans(pca.X, i)
+}
+
+betweenss_totss <- list()
+for (i in 1:10){
+  betweenss_totss[[i]] <- k[[i]]$betweenss/k[[i]]$totss
+}
+
+plot(1:10, betweenss_totss,type = "b", ylab = "Between SS/ Total SS", xlab = "Cluster(k)")#look where the shoulder is   # Output 9    
+
+as.data.frame(table(Mode.UrbWrk.Cst$TRPTRANS))                                                     # Output 10
+as.data.frame(table(subset(pca.full, as.character(pca.full$Mode.UrbWrk.Cst.TRPTRANS)=="taxi")$out))       # Output 11
+
+```
+### 3. Naive Bayers Classifier ----
+```{r, echo=FALSE}
+library(e1071)
+
+
+
+
+Mode.UrbWrk.NB <- Mode.RF
+
+Naive.Bayes.Model <- naiveBayes(TRPTRANS ~ . , data = Mode.UrbWrk.NB)
+Naive.Bayes.Model
+
+pred <- predict(Naive.Bayes.Model, Mode.UrbWrk.NB)
+cn <- table(pred, Mode.UrbWrk.NB$TRPTRANS)
+print(cn) # off-diagonal is mis-classification
+
+sum(diag(cn))/sum(cn) # overall classification errors are similar
+
+as.data.frame(diag(cn))/apply(as.data.frame.matrix(cn), 2, sum)
+
+caret::confusionMatrix(as.factor(predict(Naive.Bayes.Model, Mode.UrbWrk.NB)), Mode.UrbWrk.NB$TRPTRANS)
+
+
+
+
+Myvars.RF <- c("TRPTRANS", "WHYTRP1S", "HBHUR", "TRVLCMIN", "TRPMILES", "GASPRICE", "HHFAMINC", "HHVEHCNT", "HHSIZE", "R_AGE", "R_SEX", "MSACAT", "HBPPOPDN")
+Mode.RF <- Mode[Myvars.RF]
+Mode.RF <- subset(Mode.RF, as.character(Mode.RF$HBHUR) == "U" & Mode.RF$WHYTRP1S == 10)
+Mode.RF <- Mode.RF[,c(-2, -3)]
+
+
+Train <- sample(1:dim(Mode.RF)[1], dim(Mode.RF)[1]*0.7, rep=FALSE)
+Test <- -Train
+
+training_data<- Mode.RF[Train, ]
+testing_data= Mode.RF[Test, ]
+
+TrainY=training_data[[1]]  
+TrainX=training_data[,-1]
+
+TestY=testing_data[[1]]
+TestX=testing_data[,-1]
+
+
+Naive.Bayes.Model <- naiveBayes(TrainY ~ . , data = TrainX)
+
+caret::confusionMatrix(as.factor(predict(Naive.Bayes.Model,TestX)), as.factor(TestY))
+
+```
+
+### 4. Random Forest ----  
+```{r, echo=FALSE}
+library(caret)
+# library(e1071)
+
+# Myvars.RF <- c("TRPTRANS", "WHYTRP1S", "HBHUR", "TRVLCMIN", "TRPMILES", "GASPRICE", "HHFAMINC", "HHVEHCNT", "HHSIZE", "R_AGE", "R_SEX")
+# Mode.RF <- Mode[Myvars.RF]
+# Mode.RF <- subset(Mode.RF, as.character(Mode.RF$HBHUR) == "U" & Mode.RF$WHYTRP1S == 10)
+# Mode.RF <- Mode.RF[,c(-2, -3)]
+
+
+
+# Mode.RF <- Mode.UrbWrk.Cst[, -9]
+
+set.seed(123)
+
+Train <- sample(1:dim(Mode.RF)[1], dim(Mode.RF)[1]*0.7, rep=FALSE)
+Test <- -Train
+
+training_data<- Mode.RF[Train, ]
+testing_data= Mode.RF[Test, ]
+
+TrainY=training_data[[1]]  
+TrainX=training_data[,-1]
+
+TestY=testing_data[[1]]
+TestX=testing_data[,-1]
+
+indx <- createFolds(TrainY, k = 5, returnTrain = TRUE)
+ctrl <- trainControl(method = "repeatedcv", number = 5, repeats = 10, index = indx)
+mtryGrid <- data.frame(mtry = floor(seq(2, ncol(TrainX), length = 10)))
+
+# rfTune <- train(x = TrainX, y = TrainY, method = "rf", tuneGrid = mtryGrid, ntree = 1000, importance = TRUE, trControl = ctrl)
+rfTune <- train(x = TrainX, y = TrainY, method = "rf", tuneGrid = mtryGrid, ntree = 1000, importance = TRUE, trControl = ctrl)
+rfTune
+
+# testResults<-data.frame(obs=TestY, predict(rfTune, TestX))
+testResults <- table(obs=TestY, predict(rfTune, TestX))
+testResults
+
+
+sum(diag(testResults))/sum(testResults)
+as.data.frame(diag(testResults))/apply(as.data.frame.matrix(testResults), 1, sum)
+
+
+plot(rfTune)# Plot the tuning results
+
+rfImp <- varImp(rfTune, scale = FALSE)  #variable importance
+rfImp
+plot(rfImp)
+
+
+caret::confusionMatrix(as.factor(predict(rfTune, TestX)), TestY)
+
+
+```
+
